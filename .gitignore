@@ -1,0 +1,64 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+env/
+ENV/
+.venv
+
+# Airflow
+logs/
+airflow.db
+airflow.cfg
+airflow-webserver.pid
+unittests.cfg
+
+# Spark
+metastore_db/
+derby.log
+spark-warehouse/
+checkpoint/
+*.log
+
+# Cassandra
+cassandra_data/
+
+# Environment variables
+.env
+*.env
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Docker
+docker-compose.override.yml
+
+# Temporary files
+*.tmp
+*.bak
+tmp/
+temp/
+
+# Secrets - IMPORTANT!
+*.pem
+*.key
+*.crt
+secrets/
+credentials/
+
+# Data files (if you have any sample data)
+*.csv
+*.json
+*.parquet
+data/
