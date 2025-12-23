@@ -127,7 +127,6 @@ services:
       - airflow-logs:/opt/airflow/logs
       - airflow-packages:/home/airflow/.local
       - airflow-logs:/opt/airflow/logs
-      - airflow-packages:/home/airflow/.local
     ports:
       - "8080:8080"
     healthcheck:
