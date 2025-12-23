@@ -75,34 +75,34 @@ services:
       interval: 30s
       timeout: 10s
       retries: 5
-  
-  control-center:
-    image: confluentinc/cp-enterprise-control-center:7.4.0
-    hostname: control-center
-    container_name: control-center
-    depends_on:
-      broker:
-        condition: service_healthy
-      schema-registry:
-        condition: service_healthy
-    ports:
-      - "9021:9021"
-    environment:
-      CONTROL_CENTER_BOOTSTRAP_SERVERS: 'broker:29092'
-      CONTROL_CENTER_SCHEMA_REGISTRY_URL: "http://schema-registry:8081"
-      CONTROL_CENTER_REPLICATION_FACTOR: 1
-      CONTROL_CENTER_INTERNAL_TOPICS_PARTITIONS: 1
-      CONTROL_CENTER_MONITORING_INTERCEPTOR_TOPIC_PARTITIONS: 1
-      CONFLUENT_METRICS_TOPIC_REPLICATION: 1
-      CONFLUENT_METRICS_ENABLE: 'false'
-      PORT: 9021
-    networks:
-      - confluent
-    healthcheck:
-      test: [ "CMD", "curl", "-f", "http://localhost:9021/health" ]
-      interval: 30s
-      timeout: 10s
-      retries: 5
+  # control center disabled to reduce resource consumption during development you can enable it if needed in monitoring use cases
+  # control-center:
+  #   image: confluentinc/cp-enterprise-control-center:7.4.0
+  #   hostname: control-center
+  #   container_name: control-center
+  #   depends_on:
+  #     broker:
+  #       condition: service_healthy
+  #     schema-registry:
+  #       condition: service_healthy
+  #   ports:
+  #     - "9021:9021"
+  #   environment:
+  #     CONTROL_CENTER_BOOTSTRAP_SERVERS: 'broker:29092'
+  #     CONTROL_CENTER_SCHEMA_REGISTRY_URL: "http://schema-registry:8081"
+  #     CONTROL_CENTER_REPLICATION_FACTOR: 1
+  #     CONTROL_CENTER_INTERNAL_TOPICS_PARTITIONS: 1
+  #     CONTROL_CENTER_MONITORING_INTERCEPTOR_TOPIC_PARTITIONS: 1
+  #     CONFLUENT_METRICS_TOPIC_REPLICATION: 1
+  #     CONFLUENT_METRICS_ENABLE: 'false'
+  #     PORT: 9021
+  #   networks:
+  #     - confluent
+  #   healthcheck:
+  #     test: [ "CMD", "curl", "-f", "http://localhost:9021/health" ]
+  #     interval: 30s
+  #     timeout: 10s
+  #     retries: 5
 
   webserver:
     image: apache/airflow:2.6.0-python3.9
@@ -124,6 +124,10 @@ services:
       - ./dags:/opt/airflow/dags
       - ./script/entrypoint.sh:/opt/airflow/script/entrypoint.sh
       - ./requirements.txt:/opt/airflow/requirements.txt
+      - airflow-logs:/opt/airflow/logs
+      - airflow-packages:/home/airflow/.local
+      - airflow-logs:/opt/airflow/logs
+      - airflow-packages:/home/airflow/.local
     ports:
       - "8080:8080"
     healthcheck:
@@ -131,9 +135,12 @@ services:
       interval: 30s
       timeout: 30s
       retries: 5
-      start_period: 80s
+      start_period: 120s
     networks:
       - confluent
+    dns:
+      - "8.8.8.8"
+      - "8.8.4.4"
 
   scheduler:
     image: apache/airflow:2.6.0-python3.9
@@ -144,6 +151,8 @@ services:
       - ./dags:/opt/airflow/dags
       - ./script/entrypoint.sh:/opt/airflow/script/entrypoint.sh
       - ./requirements.txt:/opt/airflow/requirements.txt
+      - airflow-logs:/opt/airflow/logs
+      - airflow-packages:/home/airflow/.local
     environment:
       - LOAD_EX=n
       - EXECUTOR=Sequential
@@ -152,6 +161,9 @@ services:
     command: bash -c "pip install -r ./requirements.txt && airflow db upgrade && airflow scheduler"
     networks:
       - confluent
+    dns:
+      - "8.8.8.8"
+      - "8.8.4.4"
 
   postgres:
     image: postgres:14.0
@@ -208,5 +220,29 @@ services:
       - CASSANDRA_PASSWORD=cassandra
     networks:
       - confluent
+
+  grafana:
+    image: grafana/grafana:10.2.0
+    container_name: grafana
+    hostname: grafana
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_INSTALL_PLUGINS=hadesarchitect-cassandra-datasource
+    volumes:
+      - grafana-storage:/var/lib/grafana
+    networks:
+      - confluent
+    depends_on:
+      - cassandra_db
+    restart: unless-stopped
+
 networks:
   confluent:
+
+volumes:
+  grafana-storage:
+  airflow-logs:
+  airflow-packages:
