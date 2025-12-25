@@ -1,9 +1,19 @@
 import logging
+import re
 
 from cassandra.cluster import Cluster
 from pyspark.sql import SparkSession
-from pyspark.sql.functions import from_json, col
+from pyspark.sql.functions import from_json, col, udf, split, to_date, year, month, dayofmonth
 from pyspark.sql.types import StructType, StructField, StringType
+
+
+def extract_country(address):
+    """Extract country from address string (last part after last comma)"""
+    if address:
+        parts = address.split(',')
+        if len(parts) > 0:
+            return parts[-1].strip()
+    return "Unknown"
 
 
 def create_keyspace(session):
@@ -11,7 +21,6 @@ def create_keyspace(session):
         CREATE KEYSPACE IF NOT EXISTS spark_streams
         WITH replication = {'class': 'SimpleStrategy', 'replication_factor': '1'};
     """)
-
     print("Keyspace created successfully!")
 
 
@@ -28,9 +37,12 @@ def create_table(session):
         username TEXT,
         registered_date TEXT,
         phone TEXT,
-        picture TEXT);
+        picture TEXT,
+        year TEXT,
+        month TEXT,
+        day TEXT,
+        country TEXT);
     """)
-
     print("Table created successfully!")
 
 
@@ -45,19 +57,23 @@ def insert_data(session, **kwargs):
     postcode = kwargs.get('post_code')
     email = kwargs.get('email')
     username = kwargs.get('username')
-    dob = kwargs.get('dob')
     registered_date = kwargs.get('registered_date')
     phone = kwargs.get('phone')
     picture = kwargs.get('picture')
+    year_val = kwargs.get('year')
+    month_val = kwargs.get('month')
+    day_val = kwargs.get('day')
+    country = kwargs.get('country')
 
     try:
         session.execute("""
             INSERT INTO spark_streams.created_users(id, first_name, last_name, gender, address, 
-                post_code, email, username, dob, registered_date, phone, picture)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                post_code, email, username, registered_date, phone, picture, year, month, day, country)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
         """, (user_id, first_name, last_name, gender, address,
-              postcode, email, username, dob, registered_date, phone, picture))
-        logging.info(f"Data inserted for {first_name} {last_name}")
+              postcode, email, username, registered_date, phone, picture, 
+              year_val, month_val, day_val, country))
+        logging.info(f"Data inserted for {first_name} {last_name} from {country}")
 
     except Exception as e:
         logging.error(f'could not insert data due to {e}')
@@ -100,11 +116,8 @@ def connect_to_kafka(spark_conn):
 
 def create_cassandra_connection():
     try:
-        # connecting to the cassandra cluster
         cluster = Cluster(['localhost'])
-
         cas_session = cluster.connect()
-
         return cas_session
     except Exception as e:
         logging.error(f"Could not create cassandra connection due to {e}")
@@ -126,19 +139,37 @@ def create_selection_df_from_kafka(spark_df):
         StructField("picture", StringType(), False)
     ])
 
+    # Parse JSON from Kafka
     sel = spark_df.selectExpr("CAST(value AS STRING)") \
         .select(from_json(col('value'), schema).alias('data')).select("data.*")
-    print(sel)
-
-    return sel
+    
+    # Register UDF for country extraction
+    extract_country_udf = udf(extract_country, StringType())
+    
+    # Add transformations
+    sel_transformed = sel \
+        .withColumn("country", extract_country_udf(col("address"))) \
+        .withColumn("date_parsed", to_date(col("registered_date"))) \
+        .withColumn("year", year(col("date_parsed")).cast(StringType())) \
+        .withColumn("month", month(col("date_parsed")).cast(StringType())) \
+        .withColumn("day", dayofmonth(col("date_parsed")).cast(StringType())) \
+        .drop("date_parsed")  # Remove temporary column
+    
+    print("Schema after transformations:")
+    sel_transformed.printSchema()
+    
+    return sel_transformed
 
 
 if __name__ == "__main__":
-    # create spark connection
+    # Setup logging
+    logging.basicConfig(level=logging.INFO)
+    
+    # Create spark connection
     spark_conn = create_spark_connection()
 
     if spark_conn is not None:
-        # connect to kafka with spark connection
+        # Connect to kafka with spark connection
         spark_df = connect_to_kafka(spark_conn)
         selection_df = create_selection_df_from_kafka(spark_df)
         session = create_cassandra_connection()
