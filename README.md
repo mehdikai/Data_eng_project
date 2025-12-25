@@ -9,6 +9,7 @@ A production-ready, end-to-end real-time data streaming pipeline that processes 
 
 ## 📊 Project Overview
 
+[Dashboard_Overview](https://github.com/mehdikai/Data_eng_project/blob/main/Dashboard_Overview.png)
 This project demonstrates a complete streaming analytics platform that:
 - Ingests user data from an external API
 - Streams data through Apache Kafka
