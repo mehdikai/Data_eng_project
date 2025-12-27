@@ -22,7 +22,7 @@ This project demonstrates a complete streaming analytics platform that:
 
 ## 🏗️ Architecture
 
-![System Architecture](https://github.com/)
+![System Architecture](Architecture_Data_Engneering.png)
 
 ### Data Flow:
 1. **Data Ingestion:** Airflow orchestrates API calls to fetch random user data
